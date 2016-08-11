@@ -61,7 +61,10 @@ if __name__ == '__main__':
         ibfm_utility.plotPgvGraph(graph,filename=os.path.join(path,filename)+extension,
                             promoteNodeLabels='function',
                             printRelationships='flowType')
+        ibfm_utility.grammars.check_model(graph)
+        break
     
+
 #    #Create and run experiments (broken until we resolve FunctionFlow vs Function_Flow convention)
 #    eps = ibfm.Experiment(g)
 #    #Run with 2 then 3 simultaneous faults

@@ -62,6 +62,8 @@ from collections import defaultdict
 import string
 import ibfm
 
+from ibfm import Function, Mode, Condition, Behavior
+
 class Rule(object):
     def __init__(self,name,lhspath,rhspath):
         '''
@@ -371,17 +373,65 @@ class Ruleset(object):
 def Tree(): 
     return defaultdict(Tree)
 
-def check_model():
+def check_model(g):
     """
     Check that the given graph can be simulated by ibfm code
     If not, automatically fix common errors
     If error is not fixed, discard
     """
-    #Load functions.ibfm
-    #Load modes.ibfm
+    bad_graph = False    
+    fixed = False
     
     #Check for correct in/out of each function in model
-    
+    nodeCompatibility = {}
+    for node in g.nodes_iter():
+        in_edges = [e[-1]['flowType'] for e in g.in_edges(node,keys=True,data=True)]
+        out_edges = [e[-1]['flowType'] for e in g.in_edges(node,keys=True,data=True)]
+        
+        #ibfm convention does not contain _ in function names
+        in_edges = [ins.replace('_','') for ins in in_edges]
+        out_edges = [outs.replace('_','') for outs in out_edges]
+        nodeFunction = g.node[node]['function'].replace('_','')
+        
+        #node's I/O must match the full set of IOs for all operational and failed behaviors
+
+        #get functions and modes        
+        nodeBehaviors = [k[0] for k in ibfm.functions[nodeFunction] if k[1] == 'Operational' or k[1] == 'Failed']
+        nodeModes = [ibfm.modes[nb] for nb in nodeBehaviors]
+
+        #get data for given modes 
+        nodeModeInputs = [nm[2] for nms in nodeModes for nm in nms if nm[1] == 'required']
+        nodeModeOutputs = [nm[3] for nms in nodeModes for nm in nms if nm[1] == 'required']
+
+        #Get inputs and outputs for given mode
+        n_outs = []
+        for nmi in nodeModeOutputs:
+            if nmi not in n_outs:
+                n_outs.extend(nmi)
+        
+        n_ins = []
+        for nmi in nodeModeInputs:
+            if nmi not in n_ins:
+                n_ins.extend(nmi)
+                
+        n_ins = list(set(n_ins))
+        n_outs = list(set(n_outs))
+        
+        print('node',node)
+        print('required ins',n_ins)
+        print('in_edges',in_edges)
+        print('required outs',n_outs)
+        print('out_edges',out_edges)
+        
+        if set(n_ins).issubset(set(in_edges)) and set(n_outs).issubset(set(out_edges)):
+            nodeCompatibility[node] = True
+            print('True')
+        else:
+            nodeCompatibility[node] = False
+            print('False')
+
+        
+        print(nodeCompatibility)
     #IF mismatch, attempt to add/remove nodes to ensure compliance
     
     #Final model check, discard if not compliant
