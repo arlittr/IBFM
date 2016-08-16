@@ -61,6 +61,7 @@ import random
 from collections import defaultdict
 import string
 import ibfm
+import inspect
 
 from ibfm import Function, Mode, Condition, Behavior
 
@@ -307,7 +308,7 @@ class Ruleset(object):
         breadth -- breadth to expand each node
         depth -- depth of search tree (distance from leaves to root)
         Returns:
-        pop -- a list of graphs in the newly generated population
+        pop -- a list of graphs in the newly generated population TODO: change varname
         
         """
         pop = Tree()
@@ -379,19 +380,31 @@ def check_model(g):
     If not, automatically fix common errors
     If error is not fixed, discard
     """
-    bad_graph = False    
-    fixed = False
+    #Current issues with inconsistent flow terminology
+    
+#    bad_graph = False    
+#    fixed = False
+    
+    flowClassLabels = {v:k for k,v in ibfm.Flow._subclasses.items()}
     
     #Check for correct in/out of each function in model
     nodeCompatibility = {}
     for node in g.nodes_iter():
+        #get in and out edges for node
         in_edges = [e[-1]['flowType'] for e in g.in_edges(node,keys=True,data=True)]
-        out_edges = [e[-1]['flowType'] for e in g.in_edges(node,keys=True,data=True)]
+        out_edges = [e[-1]['flowType'] for e in g.out_edges(node,keys=True,data=True)]
+        
+        flowClassLabels = {v:k for k,v in ibfm.Flow._subclasses.items()}
+        in_edges = getFlowSuperclasses(in_edges)
+        in_edges = [flowClassLabels[e] for e in in_edges if e in flowClassLabels]
+        out_edges = getFlowSuperclasses(out_edges)  
+        out_edges = [flowClassLabels[e] for e in out_edges if e in flowClassLabels]
         
         #ibfm convention does not contain _ in function names
-        in_edges = [ins.replace('_','') for ins in in_edges]
-        out_edges = [outs.replace('_','') for outs in out_edges]
-        nodeFunction = g.node[node]['function'].replace('_','')
+#        in_edges = [ins.replace('_','') for ins in in_edges]
+#        out_edges = [outs.replace('_','') for outs in out_edges]
+#        nodeFunction = g.node[node]['function'].replace('_','')
+        nodeFunction = g.node[node]['function']
         
         #node's I/O must match the full set of IOs for all operational and failed behaviors
 
@@ -404,34 +417,48 @@ def check_model(g):
         nodeModeOutputs = [nm[3] for nms in nodeModes for nm in nms if nm[1] == 'required']
 
         #Get inputs and outputs for given mode
-        n_outs = []
-        for nmi in nodeModeOutputs:
-            if nmi not in n_outs:
-                n_outs.extend(nmi)
+        required_outs = []
+        for nmo in nodeModeOutputs:
+            if nmo not in required_outs:
+                required_outs.extend(nmo)
         
-        n_ins = []
+        required_ins = []
         for nmi in nodeModeInputs:
-            if nmi not in n_ins:
-                n_ins.extend(nmi)
+            if nmi not in required_ins:
+                required_ins.extend(nmi)
                 
-        n_ins = list(set(n_ins))
-        n_outs = list(set(n_outs))
+        required_ins = list(set(required_ins))
+        required_outs = list(set(required_outs))
         
-        print('node',node)
-        print('required ins',n_ins)
-        print('in_edges',in_edges)
-        print('required outs',n_outs)
-        print('out_edges',out_edges)
+#        print('node',node)
+#        print('required ins',required_ins)
+#        print('in_edges',in_edges)
+#        print('required outs',required_outs)
+#        print('out_edges',out_edges)
         
-        if set(n_ins).issubset(set(in_edges)) and set(n_outs).issubset(set(out_edges)):
+        if set(required_ins).issubset(set(in_edges)) and set(required_outs).issubset(set(out_edges)):
             nodeCompatibility[node] = True
-            print('True')
+#            print('True')
         else:
             nodeCompatibility[node] = False
-            print('False')
+#            print('False')
 
         
-        print(nodeCompatibility)
+#        print(nodeCompatibility)
     #IF mismatch, attempt to add/remove nodes to ensure compliance
     
     #Final model check, discard if not compliant
+    if False in nodeCompatibility.values():
+        return False
+    else:
+        return True
+    
+def getFlowSuperclasses(edges):
+    #get superclasses of all given edges
+    #this lets us match behaviors with less strict requirements:
+    #e.g., if we have 'Mechanical Energy' and we just need 'Energy'
+    new_edges = []
+    for e in edges:
+        new_edges.extend([x for x in inspect.getmro(ibfm.Flow._subclasses[e])])
+    return list(set(new_edges))
+                    
